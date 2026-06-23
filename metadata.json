@@ -1,0 +1,6 @@
+{
+  "name": "Actor Hub",
+  "description": "An interactive full-stack AI call center service assistant named Actor. Includes a high-fidelity customer chat simulation and a real-time agent operations dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
