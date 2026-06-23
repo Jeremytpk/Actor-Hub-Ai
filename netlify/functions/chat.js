@@ -24,8 +24,12 @@ export const handler = async function (event, context) {
       return { statusCode: 500, body: JSON.stringify({ error: 'GEMINI_API_KEY environment variable is missing. Please set it in Netlify site settings.' }) };
     }
 
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey: key });
+  // Some SDKs ship CommonJS code that references `module`/`exports`.
+  // Netlify functions run this file as an ES module. Use createRequire to load CommonJS safely.
+  const { createRequire } = await import('module');
+  const require = createRequire(import.meta.url);
+  const { GoogleGenAI } = require('@google/genai');
+  const ai = new GoogleGenAI({ apiKey: key });
 
     const contents = history.map(msg => ({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] }));
 
