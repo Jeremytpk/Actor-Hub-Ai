@@ -1,7 +1,7 @@
 // Netlify Function: proxy /api/chat -> serverless function using server-side GEMINI_API_KEY
 // Uses dynamic import of @google/genai so this file stays compatible with Netlify's Node runtime.
 
-exports.handler = async function (event, context) {
+export const handler = async function (event, context) {
   try {
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
@@ -61,3 +61,4 @@ exports.handler = async function (event, context) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Server error' }) };
   }
 };
+
