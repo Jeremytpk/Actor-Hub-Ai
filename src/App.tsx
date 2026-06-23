@@ -165,72 +165,88 @@ export default function App() {
     }
 
     // Always proxy to the server-side API for production (server uses GEMINI_API_KEY).
-
-    // Server-side call via Express
+    // Try the standard proxy path first (/api/chat). If that fails (timeouts, HTML fallback, proxy issues),
+    // fall back to the direct Netlify function URL (/.netlify/functions/chat).
     try {
-      let response;
-      try {
-        response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ history: newMessages }),
-        });
-      } catch (networkErr: any) {
-        throw new Error(`Erreur réseau : Impossible de joindre le serveur d'API d'Actor. (${networkErr.message})`);
-      }
+      const endpoints = ['/api/chat', '/.netlify/functions/chat'];
+      let response: Response | null = null;
+      let responseText = '';
+      let lastErr: any = null;
 
-      // Detect if static server or Netlify is serving the index.html page as a fallback (typically returns html)
-      const contentType = response.headers.get("content-type") || "";
-      const isHtml = contentType.includes("text/html");
-
-      if (isHtml || response.status === 404) {
-        throw new Error(
-          "Erreur d'hébergement : Le serveur d'API (/api/chat) est introuvable (404) ou renvoie une page HTML. " +
-          "Sur Netlify, seule la partie statique est hébergée et le serveur Express ne tourne pas. " +
-          "Veuillez utiliser l'URL de développement d'AI Studio pour tester pleinement le serveur, " +
-          "ou configurez la variable d'environnement Netlify 'VITE_GEMINI_API_KEY' pour exécuter l'IA en direct depuis votre navigateur."
-        );
-      }
-
-      const responseText = await response.text();
-
-      if (!response.ok) {
-        let errMessage = `Erreur serveur (${response.status})`;
+      for (const endpoint of endpoints) {
         try {
-          if (responseText.trim()) {
-            const errData = JSON.parse(responseText);
-            errMessage = errData.error || errMessage;
+          response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history: newMessages }),
+          });
+        } catch (networkErr: any) {
+          lastErr = networkErr;
+          // try next endpoint
+          continue;
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        const isHtml = contentType.includes('text/html');
+
+        // If the response is HTML (Netlify serving index.html) or 404, try the next endpoint
+        if (isHtml || response.status === 404) {
+          lastErr = new Error('API path returned HTML or 404 (likely missing server functions)');
+          continue;
+        }
+
+        // For 5xx errors, also try the next endpoint
+        if (response.status >= 500) {
+          responseText = await response.text().catch(() => '');
+          lastErr = new Error(responseText || `Server error ${response.status}`);
+          continue;
+        }
+
+        responseText = await response.text();
+
+        if (!response.ok) {
+          let errMessage = `Erreur serveur (${response.status})`;
+          try {
+            if (responseText.trim()) {
+              const errData = JSON.parse(responseText);
+              errMessage = errData.error || errMessage;
+            }
+          } catch {
+            errMessage = responseText.substring(0, 150) || errMessage;
           }
-        } catch {
-          errMessage = responseText.substring(0, 150) || errMessage;
+          throw new Error(errMessage);
         }
-        throw new Error(errMessage);
+
+        // Try parsing JSON
+        try {
+          const data = responseText.trim() ? JSON.parse(responseText) : null;
+          if (!data) throw new Error('La réponse du serveur est vide.');
+
+          const reply = data.content;
+          const modelMsg: Message = {
+            id: `msg-${Date.now() + 1}`,
+            role: 'model',
+            content: reply,
+            timestamp: new Date().toISOString()
+          };
+
+          setMessages(prev => [...prev, modelMsg]);
+          lastErr = null;
+          break; // success
+        } catch (parseErr: any) {
+          lastErr = parseErr;
+          // try next endpoint
+          continue;
+        }
       }
 
-      let data;
-      try {
-        if (!responseText.trim()) {
-          throw new Error("La réponse du serveur est vide.");
-        }
-        data = JSON.parse(responseText);
-      } catch {
-        throw new Error("Échec du décodage de la réponse (format JSON attendu invalide).");
+      if (lastErr) {
+        throw lastErr;
       }
-
-      const reply = data.content;
-
-      const modelMsg: Message = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'model',
-        content: reply,
-        timestamp: new Date().toISOString()
-      };
-
-      setMessages(prev => [...prev, modelMsg]);
 
     } catch (err: any) {
-      console.error("Chat communication failure:", err);
-      setApiError(err.message || "Échec de la communication avec Actor. Veuillez réessayer plus tard.");
+      console.error('Chat communication failure:', err);
+      setApiError(err.message || 'Échec de la communication avec Actor. Veuillez réessayer plus tard.');
     } finally {
       setIsTyping(false);
     }
