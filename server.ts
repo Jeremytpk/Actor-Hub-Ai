@@ -16,9 +16,9 @@ let aiClient: GoogleGenAI | null = null;
 
 function getAi(): GoogleGenAI {
   if (!aiClient) {
-    const key = process.env.GEMINI_API_KEY;
+    const key = process.env.AURA_KEY || process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new Error("GEMINI_API_KEY environment variable is missing. Please set it in Settings > Secrets.");
+      throw new Error("AURA_KEY or GEMINI_API_KEY environment variable is missing. Please set it in Settings > Secrets.");
     }
     aiClient = new GoogleGenAI({
       apiKey: key,

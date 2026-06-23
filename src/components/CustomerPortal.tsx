@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, RefreshCw, MessageSquare, Shield, HelpCircle, PhoneCall, AlertCircle, Sparkles } from 'lucide-react';
+import { Send, RefreshCw, MessageSquare, Shield, HelpCircle, PhoneCall, AlertCircle, Sparkles, Key } from 'lucide-react';
 import { Message } from '../types';
 
 interface CustomerPortalProps {
@@ -8,6 +8,8 @@ interface CustomerPortalProps {
   isTyping: boolean;
   onResetChat: () => void;
   apiError: string | null;
+  onConfigureKeys?: () => void;
+  onActivateDemo?: () => void;
 }
 
 const INQUIRY_TEMPLATES = [
@@ -42,7 +44,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   onSendMessage,
   isTyping,
   onResetChat,
-  apiError
+  apiError,
+  onConfigureKeys,
+  onActivateDemo
 }) => {
   const [input, setInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -229,9 +233,35 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
         {apiError && (
           <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 flex items-start space-x-2.5 text-xs text-rose-800">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Erreur de connexion</p>
-              <p className="text-rose-500 mt-0.5">{apiError}</p>
+            <div className="flex-1 space-y-2">
+              <div>
+                <p className="font-semibold">Erreur de connexion</p>
+                <p className="text-rose-500 mt-0.5">{apiError}</p>
+              </div>
+              
+              {/* Fallback actions inside the error banner */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {onActivateDemo && (
+                  <button
+                    onClick={onActivateDemo}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all cursor-pointer flex items-center space-x-1"
+                    id="btn-error-activate-demo"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Activer le Mode Démo (Gratuit / Simulation)</span>
+                  </button>
+                )}
+                {onConfigureKeys && (
+                  <button
+                    onClick={onConfigureKeys}
+                    className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium px-2.5 py-1 rounded-md text-[11px] shadow-sm transition-all cursor-pointer flex items-center space-x-1"
+                    id="btn-error-configure-keys"
+                  >
+                    <Key className="w-3 h-3 text-slate-500" />
+                    <span>Configurer Clé d'API</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
