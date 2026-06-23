@@ -130,17 +130,8 @@ export default function App() {
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Key management states
-  const [auraKey, setAuraKey] = useState<string>(() => localStorage.getItem('local_aura_key') || '');
-  const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem('local_gemini_key') || '');
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    const saved = localStorage.getItem('demo_mode_active');
-    // If we have a default/local auraKey or env key and no saved demo mode preference, default to real key instead of demo
-    if (!saved && (localStorage.getItem('local_aura_key') || (import.meta as any).env.VITE_AURA_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY)) {
-      return false;
-    }
-    return saved === 'true';
-  });
+  // Demo mode state and modal
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => localStorage.getItem('demo_mode_active') === 'true');
   const [keySettingsOpen, setKeySettingsOpen] = useState<boolean>(false);
 
   // Handle customer portal messages
@@ -173,47 +164,7 @@ export default function App() {
       return;
     }
 
-    // Retrieve active client key (local storage overrides env variables)
-    const clientApiKey = auraKey || geminiKey || (import.meta as any).env.VITE_AURA_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
-
-    if (clientApiKey) {
-      // Direct client-side Gemini fallback for static hostings like Netlify
-      try {
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({ apiKey: clientApiKey });
-        
-        const contents = newMessages.map(msg => ({
-          role: msg.role === 'model' ? 'model' : 'user',
-          parts: [{ text: msg.content }]
-        }));
-
-        const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: contents,
-          config: {
-            systemInstruction: CLIENT_SYSTEM_INSTRUCTIONS,
-          }
-        });
-
-        const reply = response.text || "Je m'excuse, j'ai rencontré un problème pour traiter votre demande. Pourriez-vous répéter s'il vous plaît ?";
-        
-        const modelMsg: Message = {
-          id: `msg-${Date.now() + 1}`,
-          role: 'model',
-          content: reply,
-          timestamp: new Date().toISOString()
-        };
-
-        setMessages(prev => [...prev, modelMsg]);
-        setIsTyping(false);
-        return;
-      } catch (clientErr: any) {
-        console.error("Client-side Gemini API failure:", clientErr);
-        setApiError(`Échec de l'appel direct Gemini client : ${clientErr.message || clientErr}. Essayez d'activer le Mode Démo.`);
-        setIsTyping(false);
-        return;
-      }
-    }
+    // Always proxy to the server-side API for production (server uses GEMINI_API_KEY).
 
     // Server-side call via Express
     try {
@@ -316,8 +267,8 @@ export default function App() {
               className="flex items-center space-x-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white rounded-xl transition-all cursor-pointer font-medium"
               id="btn-trigger-key-settings"
             >
-              <span className={`w-2 h-2 rounded-full ${isDemoMode ? 'bg-amber-400 animate-pulse' : (auraKey || geminiKey) ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
-              <span>{isDemoMode ? 'Mode Démo (Simulation)' : (auraKey || geminiKey) ? 'Clé personnalisée active' : 'Mode Serveur'}</span>
+              <span className={`w-2 h-2 rounded-full ${isDemoMode ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+              <span>{isDemoMode ? 'Mode Démo (Simulation)' : 'Mode Serveur'}</span>
               <Settings className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
@@ -372,8 +323,8 @@ export default function App() {
             </div>
 
             <div className="p-6 space-y-4 text-slate-300">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Pour faire fonctionner l'assistant Actor sur Netlify ou d'autres hébergements statiques sans passer par notre serveur principal, vous pouvez coller votre propre clé ou générer une simulation de démonstration instantanée.
+                <p className="text-xs text-slate-400 leading-relaxed">
+                Pour des raisons de sécurité, l'IA doit être exécutée côté serveur. Activez le <strong>Mode Démo</strong> pour tester localement, ou configurez la variable d'environnement serveur <code>GEMINI_API_KEY</code> sur votre hébergeur (Netlify, etc.) puis redéployez.
               </p>
 
               {/* Demo Mode Button */}
@@ -407,63 +358,22 @@ export default function App() {
               </div>
 
               {/* Manual Input Fields */}
-              <div className="space-y-3 pt-2">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Ou coller vos clés réelles</div>
-                
-                <div className="space-y-1">
-                  <label className="block text-[11px] text-slate-300 font-medium">Clé Aura (AURA_KEY)</label>
-                  <input 
-                    type="password"
-                    placeholder="Ex: AIzaSy..."
-                    value={auraKey}
-                    onChange={(e) => {
-                      setAuraKey(e.target.value);
-                      localStorage.setItem('local_aura_key', e.target.value);
-                      if (e.target.value) {
-                        setIsDemoMode(false);
-                        localStorage.setItem('demo_mode_active', 'false');
-                        setApiError(null);
-                      }
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
-                  />
+                <div className="space-y-3 pt-2">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Clé côté serveur uniquement</div>
+                  <p className="text-[11px] text-slate-450 leading-relaxed">Ne collez pas de clé dans l'UI. Configurez <code>GEMINI_API_KEY</code> dans les variables d'environnement de votre hébergeur (Netlify/Cloud Run).</p>
                 </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[11px] text-slate-300 font-medium">Clé Gemini API (GEMINI_API_KEY)</label>
-                  <input 
-                    type="password"
-                    placeholder="Ex: AIzaSy..."
-                    value={geminiKey}
-                    onChange={(e) => {
-                      setGeminiKey(e.target.value);
-                      localStorage.setItem('local_gemini_key', e.target.value);
-                      if (e.target.value) {
-                        setIsDemoMode(false);
-                        localStorage.setItem('demo_mode_active', 'false');
-                        setApiError(null);
-                      }
-                    }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
-                  />
-                </div>
-              </div>
 
               {/* Action Button */}
               <div className="flex space-x-2 pt-2">
-                {(auraKey || geminiKey || isDemoMode) && (
+                {isDemoMode && (
                   <button
                     onClick={() => {
-                      setAuraKey('');
-                      setGeminiKey('');
                       setIsDemoMode(false);
-                      localStorage.removeItem('local_aura_key');
-                      localStorage.removeItem('local_gemini_key');
                       localStorage.removeItem('demo_mode_active');
                     }}
                     className="flex-1 py-2 px-3 border border-slate-800 hover:bg-slate-850 text-slate-300 hover:text-white rounded-lg text-xs font-semibold transition-all cursor-pointer"
                   >
-                    Réinitialiser tout
+                    Réinitialiser le Mode Démo
                   </button>
                 )}
                 <button
