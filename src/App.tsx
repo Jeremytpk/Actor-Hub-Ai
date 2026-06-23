@@ -37,11 +37,38 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Le serveur a répondu avec un statut d'erreur.");
+        let errMessage = "Échec de la communication avec le serveur d'Actor.";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errData = await response.json();
+            errMessage = errData.error || errMessage;
+          } else {
+            if (response.status === 404) {
+              errMessage = "Erreur 404 : Le serveur d'API (/api/chat) est introuvable. Netlify n'héberge que la partie statique (client) et n'exécute pas le serveur Express (Node.js) requis pour sécuriser la clé API Gemini. Veuillez tester l'application directement via l'URL de développement d'AI Studio ou déployer l'intégralité du conteneur.";
+            } else {
+              const text = await response.text();
+              errMessage = `Erreur serveur (${response.status}) : ${text.substring(0, 150)}`;
+            }
+          }
+        } catch {
+          errMessage = `Erreur de communication (Code ${response.status}).`;
+        }
+        throw new Error(errMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          data = await response.json();
+        } else {
+          throw new Error("Le serveur a renvoyé un format non valide.");
+        }
+      } catch {
+        throw new Error("Échec du décodage de la réponse du serveur.");
+      }
+
       const reply = data.content;
 
       const modelMsg: Message = {
