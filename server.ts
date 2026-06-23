@@ -4,7 +4,16 @@ import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 
+// Load environment variables from .env and then .env.local (local overrides)
+// .env is the default file for dotenv; many users prefer .env.local so try to load it too.
 dotenv.config();
+const localEnv = dotenv.config({ path: ".env.local" });
+// If a variable isn't set from .env, copy it from .env.local parsed values.
+if (localEnv.parsed) {
+  for (const [k, v] of Object.entries(localEnv.parsed)) {
+    if (!process.env[k]) process.env[k] = v as string;
+  }
+}
 
 const app = express();
 const PORT = 3000;
